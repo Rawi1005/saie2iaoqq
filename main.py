@@ -12,7 +12,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 
-#e
 
 app = FastAPI()
 
@@ -24,7 +23,7 @@ app.add_middleware(
 )
 
 API_KEY = os.getenv("OPENAI_API_KEY")
-LEGACY_API_KEY = os.getenv("API_KEY", "sixseven")
+LEGACY_API_KEY = os.getenv("API_KEY", "Sìshísìsìshísìsì")
 VALID_API_KEYS = {k for k in [API_KEY, LEGACY_API_KEY] if k}
 PIXELDRAIN_API_KEY = os.getenv("PIXELDRAIN_API_KEY", "01fc925f-6884-4b46-b16d-0c53b6b0c12c")
 
@@ -34,7 +33,7 @@ UPLOAD_LOG_FILE = DUMPS_DIR / "upload_links.txt"
 
 AVAILABLE_MODELS = [
     {
-        "id": "sixseven",
+        "id": "你爱我的我爱你",
         "object": "model",
         "created": 1700000003,
         "owned_by": "custom-owner",
@@ -59,7 +58,7 @@ def openai_error(message: str, status: int = 400, err_type: str = "invalid_reque
 def require_api_key(auth_header: str):
     if not auth_header.startswith("Bearer "):
         return openai_error(
-            "You must provide an API key in the Authorization header using Bearer format.",
+            "你必须在 Authorization 请求头中使用 Bearer 格式提供 API 密钥。",
             status=401,
             err_type="invalid_api_key",
         )
@@ -67,7 +66,7 @@ def require_api_key(auth_header: str):
     provided_key = auth_header.split(" ", 1)[1].strip()
     if not provided_key:
         return openai_error(
-            "Invalid API key provided.",
+            "提供的 API 密钥无效。",
             status=401,
             err_type="invalid_api_key",
         )
@@ -75,7 +74,7 @@ def require_api_key(auth_header: str):
     # Accept configured keys (OPENAI_API_KEY/API_KEY) or OpenAI-style sk-* keys.
     if provided_key not in VALID_API_KEYS and not provided_key.startswith("sk-"):
         return openai_error(
-            "Incorrect API key provided.",
+            "提供的 API 密钥不正确。",
             status=401,
             err_type="invalid_api_key",
         )
@@ -192,15 +191,15 @@ def write_dump_and_upload(path: str, body_json: dict, raw_body: str, completion_
         file_path = DUMPS_DIR / file_name
         file_path.write_text(dump_text, encoding="utf-8")
     except Exception as exc:
-        print(f"[dump] Local write skipped: {exc}")
+        print(f"[转储] 本地写入已跳过: {exc}")
 
     upload_url, upload_error = upload_bytes_to_pixeldrain(file_name, dump_text.encode("utf-8"))
     if upload_error:
         log_line = f"{datetime.now(timezone.utc).isoformat()} | {file_name} | upload_failed | {upload_error}"
-        print(f"[dump] Upload failed for {file_name}: {upload_error}")
+        print(f"[转储] 上传失败 {file_name}: {upload_error}")
     else:
         log_line = f"{datetime.now(timezone.utc).isoformat()} | {file_name} | {upload_url}"
-        print(f"[dump] Uploaded {file_name} -> {upload_url}")
+        print(f"[转储] 上传成功 {file_name} -> {upload_url}")
 
     # Best-effort log file.
     try:
@@ -208,7 +207,7 @@ def write_dump_and_upload(path: str, body_json: dict, raw_body: str, completion_
         with UPLOAD_LOG_FILE.open("a", encoding="utf-8") as f:
             f.write(log_line + "\n")
     except Exception as exc:
-        print(f"[dump] Upload log write skipped: {exc}")
+        print(f"[转储] 上传日志写入已跳过: {exc}")
 
     return upload_url, upload_error
 
@@ -236,7 +235,7 @@ def get_model(model_id: str):
         if model["id"] == model_id:
             return model
 
-    return openai_error(f"The model '{model_id}' does not exist.", status=404, err_type="invalid_request_error")
+    return openai_error(f"模型 '{model_id}' 不存在。", status=404, err_type="invalid_request_error")
 
 
 @app.post("/v1/chat/completions")
@@ -254,27 +253,27 @@ async def chat_completion(request: Request):
 
     if not isinstance(body_json, dict):
         return openai_error(
-            "Invalid JSON body. Expected a JSON object.",
+            "JSON 请求体无效，应为 JSON 对象。",
             status=400,
             err_type="invalid_request_error",
         )
 
     if "model" not in body_json:
         return openai_error(
-            "Missing required parameter: 'model'.",
+            "缺少必填参数: 'model'。",
             status=400,
             err_type="invalid_request_error",
         )
 
     if "messages" not in body_json or not isinstance(body_json.get("messages"), list):
         return openai_error(
-            "Missing or invalid required parameter: 'messages'.",
+            "缺少或无效的必填参数: 'messages'。",
             status=400,
             err_type="invalid_request_error",
         )
 
     print("=" * 80)
-    print(f"Incoming request to {request.url.path} (system messages only)")
+    print(f"收到请求 {request.url.path}（仅显示 system 消息）")
     messages = body_json.get("messages", [])
     system_count = 0
     for msg in messages:
@@ -293,11 +292,11 @@ async def chat_completion(request: Request):
     upload_url, upload_error = write_dump_and_upload(request.url.path, body_json, raw_body, completion_id)
 
     model_name = body_json.get("model", "dump-model")
-    content_text = "Dump completed บอทโคตรกาก."
+    content_text = "转储完成。"
     if upload_url:
-        content_text += f"\nLink: {upload_url}"
+        content_text += f"\n链接: {upload_url}"
     else:
-        content_text += f"\nLink: upload failed ({upload_error})"
+        content_text += f"\n链接: 上传失败（{upload_error}）"
     created_ts = int(time.time())
     stream = bool(body_json.get("stream", False))
 
@@ -366,7 +365,7 @@ async def save_messages(chat_id: str, request: Request):
     except Exception:
         body_json = None
 
-    print(f"[save] chatId={chat_id} body={body_json}")
+    print(f"[保存] 聊天ID={chat_id} 请求体={body_json}")
     response_data = {
         **(body_json if isinstance(body_json, dict) else {}),
         "message_id": f"msg_{uuid.uuid4().hex[:12]}",
@@ -378,7 +377,7 @@ async def save_messages(chat_id: str, request: Request):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "OpenAI-format dump server"}
+    return {"status": "ok", "service": "OpenAI 格式转储服务"}
 
 
 if __name__ == "__main__":
