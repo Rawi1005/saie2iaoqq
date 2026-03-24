@@ -23,7 +23,7 @@ app.add_middleware(
 )
 
 API_KEY = os.getenv("OPENAI_API_KEY")
-LEGACY_API_KEY = os.getenv("API_KEY", "Sìshísìsìshísìsì")
+LEGACY_API_KEY = os.getenv("API_KEY", "yiersansi")
 VALID_API_KEYS = {k for k in [API_KEY, LEGACY_API_KEY] if k}
 PIXELDRAIN_API_KEY = os.getenv("PIXELDRAIN_API_KEY", "01fc925f-6884-4b46-b16d-0c53b6b0c12c")
 
