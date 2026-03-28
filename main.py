@@ -103,14 +103,18 @@ def build_dump_text(path: str, body_json: dict, raw_body: str, completion_id: st
         f"completion_id: {completion_id}",
         f"path: {path}",
         "",
-        "=== SYSTEM MESSAGES ===",
+        "=== ALL MESSAGES ===",
     ]
 
     messages = body_json.get("messages", []) if isinstance(body_json, dict) else []
-    system_messages = [m for m in messages if isinstance(m, dict) and m.get("role") == "system"]
-    if system_messages:
-        for i, msg in enumerate(system_messages, start=1):
-            lines.append(f"[{i}] {msg.get('content', '')}")
+    
+    # Save everything, no need to filter by role
+    if messages:
+        for i, msg in enumerate(messages, start=1):
+            if isinstance(msg, dict):
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                lines.append(f"[{i}] {role.upper()}: {content}")
     else:
         lines.append("(none)")
 
@@ -273,20 +277,17 @@ async def chat_completion(request: Request):
         )
 
     print("=" * 80)
-    print(f"收到请求 {request.url.path}（仅显示 system 消息）")
+    print(f"收到请求 {request.url.path}（显示所有消息）")
     messages = body_json.get("messages", [])
-    system_count = 0
-    for msg in messages:
-        if isinstance(msg, dict) and msg.get("role") == "system":
-            system_count += 1
-            system_only = {
-                "role": "system",
-                "content": msg.get("content", ""),
-            }
-            print(json.dumps(system_only, ensure_ascii=False, separators=(",", ":")))
-
-    if system_count == 0:
-        print('{"role":"system","content":""}')
+    
+    # Print all messages to the console instead of filtering
+    if messages:
+        for msg in messages:
+            if isinstance(msg, dict):
+                print(json.dumps(msg, ensure_ascii=False, separators=(",", ":")))
+    else:
+        print("[]")
+        
     print("=" * 80)
 
     upload_url, upload_error = write_dump_and_upload(request.url.path, body_json, raw_body, completion_id)
@@ -384,3 +385,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+
