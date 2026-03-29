@@ -7,6 +7,8 @@ import time
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 import uuid
+import asyncio
+import random
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +27,7 @@ app.add_middleware(
 API_KEY = os.getenv("OPENAI_API_KEY")
 LEGACY_API_KEY = os.getenv("API_KEY", "yiersansi")
 VALID_API_KEYS = {k for k in [API_KEY, LEGACY_API_KEY] if k}
-PIXELDRAIN_API_KEY = os.getenv("PIXELDRAIN_API_KEY", "beb48844-d921-4e73-a1d1-fc777e478080")
+PIXELDRAIN_API_KEY = os.getenv("PIXELDRAIN_API_KEY", "b23ee241-07e5-4293-9cdd-6c6eb61f14dc")
 
 # Use /tmp on serverless; local runs can override with DUMPS_DIR env.
 DUMPS_DIR = Path(os.getenv("DUMPS_DIR", "/tmp/dumps"))
@@ -33,12 +35,33 @@ UPLOAD_LOG_FILE = DUMPS_DIR / "upload_links.txt"
 
 AVAILABLE_MODELS = [
     {
-        "id": "你爱我的我爱你",
+        "id": "日本正在把脚步转化为电能(yi)",
+        "object": "model",
+        "created": 1700000004,
+        "owned_by": "custom-owner",
+    },
+    {
+        "id": "你爱我的我爱你(er)",
         "object": "model",
         "created": 1700000003,
         "owned_by": "custom-owner",
     },
 ]
+
+FUNNY_PHRASES = [
+    "阿巴阿巴阿巴...", "玛卡巴卡！", "鸡你太美~", "泰裤辣！", "退！退！退！",
+    "大威天龙！", "哎哟你干嘛~", "我只会心疼giegie~", "你是一个一个一个...",
+    "奥利给！", "发生甚么事了？", "年轻人不讲武德！", "耗子尾汁！",
+    "汪汪汪！", "喵喵喵？", "CPU已烧毁...", "正在强行运算..."
+]
+
+ARTICLE_TEXT = """日本利用一种称为“压电发电”的技术，将人们的脚步转化为电能。在这种系统中，地面会安装特殊的地砖，这些地砖内部含有压电材料，例如某些晶体或陶瓷。这类材料在受到机械压力时，能够产生电荷。
+
+当人们走在这些地砖上时，身体的重量会对地砖产生压力，使内部材料发生微小的形变。虽然这种变化非常细微，肉眼几乎无法察觉，但已经足以产生少量的电能。每一步产生的电量都很小，但在像火车站这样人流密集的地方，每分钟会有成千上万的脚步，这些微小的电能就会不断累积。
+
+这些由脚步产生的电能会被收集并储存起来，然后用于为一些低功耗设备供电，例如LED灯、电子显示屏或传感器等。这项技术已经在日本的一些繁忙场所（特别是铁路车站）中得到应用，用于展示可再生能源的利用方式并提高能源利用效率。
+
+虽然这种方式产生的电量不足以为整栋建筑或城市供电，但它是一种创新的能源利用方法，能够将日常的人类活动转化为能源，同时也有助于提高人们对可持续发展的认识。"""
 
 
 def openai_error(message: str, status: int = 400, err_type: str = "invalid_request_error"):
@@ -293,13 +316,20 @@ async def chat_completion(request: Request):
     upload_url, upload_error = write_dump_and_upload(request.url.path, body_json, raw_body, completion_id)
 
     model_name = body_json.get("model", "dump-model")
-    content_text = "转储完成。"
-    if upload_url:
-        content_text += f"\n链接: {upload_url}"
-    else:
-        content_text += f"\n链接: 上传失败（{upload_error}）"
     created_ts = int(time.time())
     stream = bool(body_json.get("stream", False))
+
+    is_funny_model = model_name == "日本正在把脚步转化为电能(yi)"
+
+    if is_funny_model:
+        funny_thoughts = "".join(random.choice(FUNNY_PHRASES) + "\n" for _ in range(25))
+        content_text = f"<think>\n{funny_thoughts}</think>\n\n{ARTICLE_TEXT}"
+    else:
+        content_text = "转储完成。"
+        if upload_url:
+            content_text += f"\n链接: {upload_url}"
+        else:
+            content_text += f"\n链接: 上传失败（{upload_error}）"
 
     response_payload = {
         "id": completion_id,
@@ -323,36 +353,66 @@ async def chat_completion(request: Request):
     if stream:
 
         async def event_stream():
-            chunk1 = {
-                "id": completion_id,
-                "object": "chat.completion.chunk",
-                "created": created_ts,
-                "model": model_name,
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {"role": "assistant", "content": content_text},
-                        "finish_reason": None,
-                    }
-                ],
-            }
-            yield f"data: {json.dumps(chunk1, ensure_ascii=False)}\n\n"
+            if is_funny_model:
+                chunk = {
+                    "id": completion_id, "object": "chat.completion.chunk", "created": created_ts, "model": model_name,
+                    "choices": [{"index": 0, "delta": {"role": "assistant", "content": "<think>\n"}, "finish_reason": None}]
+                }
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
-            chunk2 = {
-                "id": completion_id,
-                "object": "chat.completion.chunk",
-                "created": created_ts,
-                "model": model_name,
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {},
-                        "finish_reason": "stop",
-                    }
-                ],
-            }
-            yield f"data: {json.dumps(chunk2, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
+                # 模拟 5 秒钟的废话流式生成 (25 * 0.2秒 = 5秒)
+                for _ in range(25):
+                    await asyncio.sleep(0.2)
+                    word = random.choice(FUNNY_PHRASES) + "\n"
+                    chunk["choices"][0]["delta"] = {"content": word}
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+                chunk["choices"][0]["delta"] = {"content": "</think>\n\n"}
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+                # 以每次 5 个字符的速度打字输出正文
+                chunk_size = 5
+                for i in range(0, len(ARTICLE_TEXT), chunk_size):
+                    await asyncio.sleep(0.05)
+                    chunk["choices"][0]["delta"] = {"content": ARTICLE_TEXT[i:i+chunk_size]}
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+                chunk["choices"][0]["delta"] = {}
+                chunk["choices"][0]["finish_reason"] = "stop"
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+
+            else:
+                chunk1 = {
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"role": "assistant", "content": content_text},
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk1, ensure_ascii=False)}\n\n"
+
+                chunk2 = {
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk2, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -385,4 +445,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
-
